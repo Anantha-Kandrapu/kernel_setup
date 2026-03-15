@@ -5,18 +5,15 @@ open in a devcontainer in vscode. (make sure docker is running)
 
 Dockerfile
 ```
-
 FROM ubuntu:24.04
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Build essentials
+RUN apt-get update && apt-get install -y wget curl ca-certificates
+RUN apt-get install -y --no-install-recommends \
     build-essential flex bison bc \
-    # Kernel build deps
     libncurses-dev libssl-dev libelf-dev dwarves kmod cpio \
-    # Debug & emulation
+    python3 pkg-config \
     gdb-multiarch qemu-system-arm busybox-static \
-    # Utilities
     git \
     && rm -rf /var/lib/apt/lists/*
 
