@@ -106,14 +106,20 @@ initramfs/
 ├── proc/
 ├── sys/
 └── tmp/
-The init Script:
+
+## The init Script:
 
 ```
 #!/bin/sh
-/bin/mount -t proc proc /proc
-/bin/mount -t sysfs sys /sys
-/bin/mount -t devtmpfs dev /dev
-exec /bin/sh
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev
+echo "ello initramfs"
+ip link set eth0 up
+ip addr add 10.0.2.15/24 dev eth0
+ip route add default via 10.0.2.2
+
+exec /bin/busybox sh
 ```
 
 Mounts virtual filesystems (needed for commands like ping, ip link)
@@ -151,6 +157,7 @@ busybox --install -s creates symlinks for all applets. Not strictly required —
 
 Compiled statically (no libc dependency) and cross-compiled for arm64. Zero dependencies — runs in a bare initramfs with nothing else.
 :::
+
 The Symlink Bug
 busybox --install -s created absolute symlinks: sh -> /initramfs/bin/busybox. Inside QEMU the root is /, not /initramfs/. So #!/bin/sh → follow symlink → /initramfs/bin/busybox → doesn't exist → error -2. Fix: make symlinks relative (sh -> busybox).
 
@@ -159,11 +166,12 @@ Kernel = the core. Scheduling, memory, drivers, networking. What you're debuggin
 OS = kernel + userspace. Shell, tools, package manager, init system, etc.
 Linux is a kernel. Ubuntu/Debian/Arch are operating systems built around it. Your QEMU setup (kernel + busybox initramfs) is a minimal OS.
 
-### Qemu Start
+## Qemu Start with your kernel
 
 ```
-qemu-system-aarch64   -machine virt   -cpu cortex-a72   -m 1024   -kernel /build/arch/arm64/boot/Image   -initrd /build/initramfs.cpio.gz   -append "console=ttyAMA0 rdinit=/init nokaslr"   -nographic   -no-reboot   -S -s   -device virtio-net-pci,netdev=net0   -netdev user,id=net0
+qemu-system-aarch64   -kernel /build/arch/arm64/boot/Image   -initrd /build/initramfs.cpio.gz   -append "console=ttyAMA0"   -machine virt   -cpu cortex-a57   -m 1024   -nographic   -netdev user,id=net0   -device virtio-net-device,netdev=net0   -s
 ```
+
 Triggering Code Paths
 The debugger pauses and steps through code, but networking code only runs when packets are sent/received. ping is the trigger.
 
@@ -172,11 +180,12 @@ ping in QEMU shell
     → kernel enters net/core/dev.c, ip_output, etc.
       → breakpoint hits → VSCode pauses → shows source line
 
-QEMU Shell Setup
-ip link set lo up
-ip link set eth0 up
-ip addr add 10.0.2.15/24 dev eth0
-ping -c 1 10.0.2.2
+# QEMU Shell Setup
+
+Do: 
+  ping -c 1 10.0.2.2 and in editor it should stop at debug points. 
+
+
 Key Breakpoints for net/core
 RX path: netif_receive_skb → __netif_receive_skb_core → ip_rcv → icmp_rcv
 
