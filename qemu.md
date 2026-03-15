@@ -25,6 +25,7 @@ Command-line hardware emulator. Like VMware but exposes a GDB stub so you can pa
 
 Emulates: CPU, RAM, NIC, serial console, etc. The kernel thinks it's on real hardware.
 
+```
 qemu-system-aarch64 \
   -kernel Image \
   -initrd initramfs.cpio.gz \
@@ -36,10 +37,13 @@ qemu-system-aarch64 \
   -netdev user,id=net0 \
   -device virtio-net-device,netdev=net0 \
   -s -S
+```
+
 -s = start GDB server on port 1234
 -S = freeze CPU at boot, wait for GDB to connect
 -gdb tcp::PORT = long form of -s, use for multiple instances on different ports
 GDB + QEMU Relationship
+
 GDB is NOT running on QEMU. Two separate processes on your host connected via TCP.
 
 QEMU has a built-in GDB server (GDB stub). It opens a TCP socket on port 1234. GDB connects to it. They communicate using the GDB Remote Serial Protocol — a simple text-based protocol over raw TCP (not HTTP).
@@ -56,7 +60,8 @@ GDB loads vmlinux.unstripped (symbol table only, never executes it)
 GDB connects to QEMU on port 1234
 CPU hits address 0xffff... → GDB looks it up in vmlinux → "that's netif_receive_skb at net/core/dev.c:5765"
 VSCode shows the source line
-VSCode Setup
+VSCode launch.json
+```
 {
     "version": "0.2.0",
     "configurations": [
@@ -77,6 +82,8 @@ VSCode Setup
         }
     ]
 }
+```
+
 Set breakpoints by clicking the gutter in VSCode. No manual GDB commands needed — launch.json handles target remote via miDebuggerServerAddress.
 
 Multiple kernels: run each QEMU on a different port (-gdb tcp::1235, etc.), create a separate VSCode debug config per kernel.
@@ -99,12 +106,16 @@ initramfs/
 ├── proc/
 ├── sys/
 └── tmp/
-The init Script
+The init Script:
+
+```
 #!/bin/sh
 /bin/mount -t proc proc /proc
 /bin/mount -t sysfs sys /sys
 /bin/mount -t devtmpfs dev /dev
 exec /bin/sh
+```
+
 Mounts virtual filesystems (needed for commands like ping, ip link)
 exec /bin/sh drops you into a shell
 How kernel executes /init
@@ -113,12 +124,21 @@ If /init is a compiled binary — kernel runs it directly. If /init is a shell s
 Creating initramfs
 mkdir -p initramfs/{bin,dev,proc,sys,tmp}
 # copy compiled busybox into initramfs/bin/
-# run busybox --install -s to create symlinks
+  eg: cp /usr/bin/busybox initramfs/bin/
+# run `busybox --install -s` to create symlinks
 # write the init script
-# chmod +x initramfs/init
+ `chmod +x initramfs/init`
+
+# use cpio(file attacher attaches files end to end)
 cd initramfs && find . | cpio -o -H newc | gzip > ../initramfs.cpio.gz
+ Eg: 
+ ```root@1e42bb7151be:/build# cd initramfs && find . | cpio -o -H newc | gzip > ../initramfs.cpio.gz
+ 3742 blocks
+ ````
+
 Not compulsory to use initramfs. Alternatives: root filesystem on disk image (-hda disk.img), or embed it into the kernel via CONFIG_INITRAMFS_SOURCE.
 
+:::Info
 cpio
 Copy In/Copy Out. Old Unix archive format. Flat list of files serialized: [header][filename][data][header][filename][data].... The kernel's built-in extractor only understands newc format (-H newc). Kernel doesn't understand tar — that's why cpio.
 
@@ -130,7 +150,7 @@ Single static binary (~300 commands). Checks argv[0] to decide behavior.
 busybox --install -s creates symlinks for all applets. Not strictly required — you could always invoke busybox <command> directly. But /bin/sh symlink is needed for the shebang in /init.
 
 Compiled statically (no libc dependency) and cross-compiled for arm64. Zero dependencies — runs in a bare initramfs with nothing else.
-
+:::
 The Symlink Bug
 busybox --install -s created absolute symlinks: sh -> /initramfs/bin/busybox. Inside QEMU the root is /, not /initramfs/. So #!/bin/sh → follow symlink → /initramfs/bin/busybox → doesn't exist → error -2. Fix: make symlinks relative (sh -> busybox).
 
@@ -139,6 +159,11 @@ Kernel = the core. Scheduling, memory, drivers, networking. What you're debuggin
 OS = kernel + userspace. Shell, tools, package manager, init system, etc.
 Linux is a kernel. Ubuntu/Debian/Arch are operating systems built around it. Your QEMU setup (kernel + busybox initramfs) is a minimal OS.
 
+### Qemu Start
+
+```
+qemu-system-aarch64   -machine virt   -cpu cortex-a72   -m 1024   -kernel /build/arch/arm64/boot/Image   -initrd /build/initramfs.cpio.gz   -append "console=ttyAMA0 rdinit=/init nokaslr"   -nographic   -no-reboot   -S -s   -device virtio-net-pci,netdev=net0   -netdev user,id=net0
+```
 Triggering Code Paths
 The debugger pauses and steps through code, but networking code only runs when packets are sent/received. ping is the trigger.
 
@@ -146,6 +171,7 @@ ping in QEMU shell
   → busybox calls sendto() syscall
     → kernel enters net/core/dev.c, ip_output, etc.
       → breakpoint hits → VSCode pauses → shows source line
+
 QEMU Shell Setup
 ip link set lo up
 ip link set eth0 up
