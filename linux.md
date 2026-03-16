@@ -1,4 +1,4 @@
-# 🐧 Linux Kernel Development & Debugging (arm64)
+# Linux Kernel Development & Debugging (arm64)
 
 This guide provides a structured workflow for building, running, and debugging the Linux kernel using **QEMU** and **VS Code**.
 
