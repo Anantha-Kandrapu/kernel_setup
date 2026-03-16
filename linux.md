@@ -2,7 +2,8 @@
 
 This guide provides a structured workflow for building, running, and debugging the Linux kernel using **QEMU** and **VS Code**.
 
----
+## 0. Clone the Linux Kernel
+```git clone https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/```
 
 ## 1. Development Environment
 
